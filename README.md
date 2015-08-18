@@ -8,7 +8,7 @@ It is not available yet with the `go get` command, so just use the source.
 
 # Example
 
-Generate a slice of float64 points:
+Generate a slice of `float64` points:
 
 ``` go
 points := [][]float64{
@@ -46,7 +46,7 @@ points := [][]float64{
 
 ```
 
-Convert them to ISamples (golof works with ISample interface, see lof/samples.go
+Convert them to `ISample`s (golof works with `ISample` interface, see `lof/samples.go`
 for details):
 
 ``` go
@@ -110,7 +110,7 @@ Sample: [4.603370800191209 1.3375110154658127],         LOF: 1.843948
 Sample: [-0.685421751407983 -0.7311555298421141],       LOF: 1.310516
 
 ```
-The full example can be found in ./example.go.
+The full example can be found in `./example.go`.
 
 # TODO
 
