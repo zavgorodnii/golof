@@ -1,6 +1,7 @@
 package main
 
 import (
+    "fmt"
     "golof/lof"
 )
 
@@ -39,7 +40,11 @@ func main() {
         {-2.3744241805625044, 1.3443896265777866},
     }
 
-    samples := lof.GetSamplesFromFloat64s(points)
-    l := lof.NewLOF(5, samples)
-    l.GetLOFs(samples, "fast")
+    samples   := lof.GetSamplesFromFloat64s(points)
+    lofGetter := lof.NewLOF(5, samples)
+    mapping   := lofGetter.GetLOFs(samples, "fast")
+
+    for key, value := range mapping {
+        fmt.Printf("Sample: %v,  \tLOF: %f\n", key.GetPoint(), value)
+    }
 }

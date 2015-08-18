@@ -1,32 +1,63 @@
 package lof
 
 import (
-    // "fmt"
     "log"
     "math"
 )
 
-type LOF struct {
-    TrainingSet []ISample
-    Distances   [][]DistItem
-    KNNs        [][]int
-    MinTrain    []float64
-    MaxTrain    []float64
-    MinPts      int
-    NumSamples  int
-    AddedIndex  int
-}
+//////////////////////////////////////////////////////////////////////////////
+//
+//  A Local Outlier Factor algorithm implementation by Markus M. Breunig.
+//  This implementation allows you to choose between updating nearest
+//  neighbors for all the samples OR updating nearest neighbors only for
+//  nearest neighbors of the added sample; See @mode parameter in GetLOFs()
+//  and GetLOF(). 
+//
+//  Created by Andrew Zavgorodny (a.o.zavgorodny@gmail.com); feel free to
+//  report bugs and contribute.
+// 
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+//
+//  This type is used to keep information anout distance between
+//  (sample1, sample2) and sample2's index
+// 
+//////////////////////////////////////////////////////////////////////////////
 
 type DistItem struct {
     Value       float64
     Index       int
 }
 
-type LofItem struct {
-    Value       float64
-    Sample      ISample
+//////////////////////////////////////////////////////////////////////////////
+//
+//  Main type; populate instances with lof.NewLof().
+// 
+//////////////////////////////////////////////////////////////////////////////
+
+type LOF struct {
+    // Slice of training samples 
+    TrainingSet []ISample
+    // Distances between the samples
+    Distances   [][]DistItem
+    // [sample index][slice of sample indices], used to keep
+    // nearest neighbors info for each sample (first neighbor
+    // is the nearest)
+    KNNs        [][]int
+    // Not used yet
+    MinTrain    []float64
+    // Not used yet
+    MaxTrain    []float64
+    // MinPts parameter from the paper, same as kNN in other
+    // implementations
+    MinPts      int
+    NumSamples  int
+    AddedIndex  int
 }
 
+// Constructor for LOF type. Check out ./samples.GetSamplesFromFloat64s()
+// for fast [][]float64 -> []ISample conversion.
 func NewLOF(minPts int, trnSamples []ISample) *LOF {
 
     numSamples := len(trnSamples)
@@ -35,18 +66,13 @@ func NewLOF(minPts int, trnSamples []ISample) *LOF {
     // distances; if we find LOF for one new sample at a
     // time, a single additional slot will be enough.
     addedIndex := len(trnSamples) + 1
-
-    if numSamples < minPts {
-        log.Fatal("Number of samples is less than MinPts!")
-    }
-
+    // Create the LOF object
     lof := &LOF{
         TrainingSet: trnSamples,
         MinPts: minPts,
         NumSamples: numSamples,
         AddedIndex: addedIndex,        
     }
-
     // Prepare storage between training samples
     lof.Distances = make([][]DistItem, addedIndex)
     for idx := 0; idx < addedIndex; idx++ {
@@ -58,12 +84,15 @@ func NewLOF(minPts int, trnSamples []ISample) *LOF {
         lof.KNNs[idx] = make([]int, minPts)
     }
     lof.train(trnSamples)
+    
     return lof
 }
 
+// Pre-compute distances between training samples and store their
+// nearest neighbors in LOF.KNNs.
 func (lof *LOF) train(samples []ISample) {
 
-    // Throughout the function this value  is used for direct indexing
+    // Throughout the train() method this value  is used for direct indexing
     // (i.e., not inside a for ...;...;... statement), so we need
     // to subtract 1 in order not to get out of range 
     addedIndex := lof.AddedIndex - 1
@@ -92,18 +121,27 @@ func (lof *LOF) train(samples []ISample) {
     }
 }
 
-func (lof *LOF) GetLOFs(samples []ISample, mode string) {
+// Shortcut for getting LOF for many samples. See GetLOF() method.
+func (lof *LOF) GetLOFs(samples []ISample, mode string) map[ISample]float64 {
 
+    output := make(map[ISample]float64)
     for _, sample := range samples {
-        log.Printf("%v: %f", sample.GetPoint(), lof.GetLOF(sample, mode))
+        output[sample] = lof.GetLOF(sample, mode)
     }
+
+    return output
 }
 
+// Returns LOF value for a sample; does lots of things, read the original
+// paper and see implemetation for details. Read below for @mode param
+// explanation.
 func (lof *LOF) GetLOF(added ISample, mode string) float64 {
 
+    // Decision between updating nearest neighbors for all the samples
+    // OR updating nearest neighbors only for nearest neighbors of the
+    // added sample
     optimized := lof.checkOptimization(mode)
-
-    // Throughout the GetLOF() func this value is mostly used for direct
+    // Throughout the GetLOF() method this value is mostly used for direct
     // indexing (i.e., not inside a for ...;...;... statement), so we
     // need to subtract 1 in order not to get out of range 
     addedIndex := lof.AddedIndex - 1
@@ -173,6 +211,8 @@ func (lof *LOF) updateNNTable(sampleIndex int, mode string) {
     }
 }
 
+// Returns Local Reachability Density for a sample (see the original
+// paper for Local Reachability Density).
 func (lof *LOF) getDensity(sampleIdx int) float64 {
 
     distanceSum := .0

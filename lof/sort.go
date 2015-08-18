@@ -4,6 +4,9 @@ import (
     "sort"
 )
 
+// This function allows you to sort a slice of DistItem values in ascending
+// order by the .Value field; the implementation is inspired by (or even
+// copied from) https://golang.org/pkg/sort/#example__sortKeys  
 func SortDistItems(distances []DistItem) {
     distance := func(s1 DistItem, s2 DistItem) bool {
         return s1.Value < s2.Value
@@ -11,7 +14,8 @@ func SortDistItems(distances []DistItem) {
     By(distance).Sort(distances)
 }
 
-// By is the type of a "less" function that defines the ordering of its Sample arguments.
+// By is the type of a "less" function that defines the ordering of its
+// Sample arguments.
 type By func(p1, p2 DistItem) bool
 
 // SampleSorter joins a By function and a slice of Distances to be sorted.
