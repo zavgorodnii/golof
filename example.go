@@ -43,8 +43,7 @@ func main() {
     samples   := lof.GetSamplesFromFloat64s(points)
     lofGetter := lof.NewLOF(5, samples)
     mapping   := lofGetter.GetLOFs(samples, "fast")
-
-    for key, value := range mapping {
-        fmt.Printf("Sample: %v,  \tLOF: %f\n", key.GetPoint(), value)
+    for sample, factor := range mapping {
+        fmt.Printf("Sample: %v,  \tLOF: %f\n", sample.GetPoint(), factor)
     }
 }
