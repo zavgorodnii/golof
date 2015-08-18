@@ -7,7 +7,7 @@ import (
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//  A Local Outlier Factor algorithm implementation by Markus M. Breunig.
+//  A Local Outlier Factor algorithm (Markus M. Breunig) implementation.
 //  This implementation allows you to choose between updating nearest
 //  neighbors for all the samples OR updating nearest neighbors only for
 //  nearest neighbors of the added sample; See @mode parameter in GetLOFs()
