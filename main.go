@@ -41,5 +41,5 @@ func main() {
 
     samples := lof.GetSamplesFromFloat64s(points)
     l := lof.NewLOF(5, samples)
-    l.GetLOFs(samples)
+    l.GetLOFs(samples, "fast")
 }

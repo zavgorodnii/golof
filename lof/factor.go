@@ -57,7 +57,6 @@ func NewLOF(minPts int, trnSamples []ISample) *LOF {
     for idx := 0; idx < addedIndex; idx++ {
         lof.KNNs[idx] = make([]int, minPts)
     }
-
     lof.train(trnSamples)
     return lof
 }
@@ -73,8 +72,8 @@ func (lof *LOF) train(samples []ISample) {
         sample.SetId(idx)  // Just additional info
     }
 
+    // Compute distances between training samples
     for i := 0; i < numSamples; i++ {
-        // Compute distances between training samples
         for j := 0; j < numSamples; j++ {
             if i == j {
                 lof.Distances[i][j].Value = 0  // This is distinctive
@@ -93,18 +92,20 @@ func (lof *LOF) train(samples []ISample) {
     }
 }
 
-func (lof *LOF) GetLOFs(samples []ISample) {
+func (lof *LOF) GetLOFs(samples []ISample, mode string) {
 
     for _, sample := range samples {
-        log.Printf("%v: %f", sample.GetPoint(), lof.GetLOF(sample))
+        log.Printf("%v: %f", sample.GetPoint(), lof.GetLOF(sample, mode))
     }
 }
 
-func (lof *LOF) GetLOF(added ISample) float64 {
+func (lof *LOF) GetLOF(added ISample, mode string) float64 {
 
-    // Throughout the function this value  is used for direct indexing
-    // (i.e., not inside a for ...;...;... statement), so we need
-    // to subtract 1 in order not to get out of range 
+    optimized := lof.checkOptimization(mode)
+
+    // Throughout the GetLOF() func this value is mostly used for direct
+    // indexing (i.e., not inside a for ...;...;... statement), so we
+    // need to subtract 1 in order not to get out of range 
     addedIndex := lof.AddedIndex - 1
     // Update distances table with added sample
     for i := 0; i < lof.NumSamples; i++ {
@@ -118,18 +119,26 @@ func (lof *LOF) GetLOF(added ISample) float64 {
         lof.Distances[addedIndex][i] = dist
         lof.Distances[addedIndex][i].Index = i
     }
-    // Fill nearest neighbors table for added sample
-    // (but don't touch any other samples yet)
-    // Find nearest samples for current one: sort distances
-    lof.updateNNTable(addedIndex, "compute")
 
-    // Now we want to update nearest neighbors table ONLY
-    // for those samples that are the added sample's nearest
-    // neighbors; this adds some error, but saves CPU time
-    for _, neighborIndex := range lof.KNNs[addedIndex] {
-        lof.updateNNTable(neighborIndex, "compute")
+    if optimized {
+        // Fill nearest neighbors table for added sample
+        // (but don't touch any other samples yet)
+        lof.updateNNTable(addedIndex, "compute")
+        // We want to update nearest neighbors table ONLY
+        // for those samples that are the added sample's nearest
+        // neighbors; this adds some error, but saves CPU time
+        for _, neighborIndex := range lof.KNNs[addedIndex] {
+            lof.updateNNTable(neighborIndex, "compute")
+        } 
+    } else {
+        // We want to update nearest neighbors for ALL samples;
+        // don't forget we subtracted one from addedIndex for
+        // direct indexing
+        for idx := 0; idx < addedIndex + 1; idx++ {
+            lof.updateNNTable(idx, "compute")  
+        }
     }
-
+    
     addedDensity := lof.getDensity(addedIndex)
     neighborDensitySum := .0
     for _, neighborIndex := range lof.KNNs[addedIndex] {
@@ -180,5 +189,20 @@ func (lof *LOF) getDensity(sampleIdx int) float64 {
         distanceSum += math.Max(distance, kDistance)
     }
 
-    return distanceSum / float64(lof.MinPts)
+    return float64(lof.MinPts) / distanceSum
+}
+
+func (lof *LOF) checkOptimization(mode string) bool {
+
+    var optimized bool
+    switch mode {
+    case "fast":
+        optimized = true
+    case "strict":
+        optimized = false
+    default:
+        log.Fatal("LOF: @mode should be either \"fast\" or \"strict\"")
+    }
+
+    return optimized
 }
