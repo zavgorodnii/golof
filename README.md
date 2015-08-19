@@ -59,7 +59,8 @@ Get a trained `LOF` type value:
 
 ``` go
 
-lofGetter := lof.NewLOF(5, samples)
+lofGetter := lof.NewLOF(5)
+lofGetter.Train(samples)
 
 ```
 

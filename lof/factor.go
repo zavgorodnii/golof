@@ -60,21 +60,31 @@ type LOF struct {
 
 // Constructor for LOF type. Check out ./samples.GetSamplesFromFloat64s()
 // for fast [][]float64 -> []ISample conversion.
-func NewLOF(minPts int, trnSamples []ISample) *LOF {
+func NewLOF(minPts int) *LOF {
 
-    numSamples := len(trnSamples)
+    // Create the LOF object
+    lof := &LOF{
+        MinPts: minPts,
+    }
+    
+    return lof
+}
+
+// Pre-compute distances between training samples and store their
+// nearest neighbors in LOF.KNNs.
+func (lof *LOF) Train(samples []ISample) {
+
+    numSamples := len(samples)
     // After training we want to compute LOF values for
     // new samples, and we need some space for their
     // distances; if we find LOF for one new sample at a
     // time, a single additional slot will be enough.
-    addedIndex := len(trnSamples) + 1
-    // Create the LOF object
-    lof := &LOF{
-        TrainingSet: trnSamples,
-        MinPts: minPts,
-        NumSamples: numSamples,
-        AddedIndex: addedIndex,        
-    }
+    addedIndex := len(samples) + 1
+
+    lof.TrainingSet = samples
+    lof.NumSamples = numSamples
+    lof.AddedIndex = addedIndex        
+
     // Prepare storage between training samples
     lof.Distances = make([][]DistItem, addedIndex)
     for idx := 0; idx < addedIndex; idx++ {
@@ -84,12 +94,43 @@ func NewLOF(minPts int, trnSamples []ISample) *LOF {
     lof.KNNs = make([][]int, addedIndex)
     lof.KNNsBackup = make([][]int, addedIndex)
     for idx := 0; idx < addedIndex; idx++ {
-        lof.KNNs[idx] = make([]int, minPts)
-        lof.KNNsBackup[idx] = make([]int, minPts)
+        lof.KNNs[idx] = make([]int, lof.MinPts)
+        lof.KNNsBackup[idx] = make([]int, lof.MinPts)
     }
-    lof.train(trnSamples)
-    
-    return lof
+
+    // Throughout the train() method this value  is used for direct indexing
+    // (i.e., not inside a for ...;...;... statement), so we need
+    // to subtract 1 in order not to get out of range 
+    addedIndex = lof.AddedIndex - 1
+    numSamples = lof.NumSamples
+    for idx, sample := range samples {
+        sample.SetId(idx)  // Just additional info
+    }
+
+    // Compute distances between training samples
+    for i := 0; i < numSamples; i++ {
+        for j := 0; j < numSamples; j++ {
+            if i == j {
+                lof.Distances[i][j].Value = 0  // This is distinctive
+                lof.Distances[i][j].Index = j
+            } else {
+                lof.Distances[i][j].Value = SampleDist(samples[i], samples[j])
+                lof.Distances[j][i].Value = lof.Distances[i][j].Value
+                lof.Distances[i][j].Index = j
+                lof.Distances[j][i].Index = i
+            }
+        }
+        // Set the additional slot's last value
+        lof.Distances[addedIndex][addedIndex].Value = 0
+        lof.Distances[addedIndex][addedIndex].Index = addedIndex
+        lof.updateNNTable(i, "train")
+    }
+    // Save the nearest neighbors table state in the backup storage 
+    for i := 0; i < numSamples; i++ {
+        for k := 1; k < lof.MinPts; k++ {
+            lof.KNNsBackup[i][k - 1] = lof.KNNs[i][k - 1] 
+        } 
+    }
 }
 
 // Shortcut for getting LOF for many samples. See GetLOF() method.
@@ -167,45 +208,6 @@ func (lof *LOF) Reset() {
     for i := 0; i < lof.NumSamples; i++ {
         for k := 1; k < lof.MinPts; k++ {
             lof.KNNs[i][k - 1] = lof.KNNsBackup[i][k - 1] 
-        } 
-    }
-}
-
-// Pre-compute distances between training samples and store their
-// nearest neighbors in LOF.KNNs.
-func (lof *LOF) train(samples []ISample) {
-
-    // Throughout the train() method this value  is used for direct indexing
-    // (i.e., not inside a for ...;...;... statement), so we need
-    // to subtract 1 in order not to get out of range 
-    addedIndex := lof.AddedIndex - 1
-    numSamples := lof.NumSamples
-    for idx, sample := range samples {
-        sample.SetId(idx)  // Just additional info
-    }
-
-    // Compute distances between training samples
-    for i := 0; i < numSamples; i++ {
-        for j := 0; j < numSamples; j++ {
-            if i == j {
-                lof.Distances[i][j].Value = 0  // This is distinctive
-                lof.Distances[i][j].Index = j
-            } else {
-                lof.Distances[i][j].Value = SampleDist(samples[i], samples[j])
-                lof.Distances[j][i].Value = lof.Distances[i][j].Value
-                lof.Distances[i][j].Index = j
-                lof.Distances[j][i].Index = i
-            }
-        }
-        // Set the additional slot's last value
-        lof.Distances[addedIndex][addedIndex].Value = 0
-        lof.Distances[addedIndex][addedIndex].Index = addedIndex
-        lof.updateNNTable(i, "train")
-    }
-    // Save the nearest neighbors table state in the backup storage 
-    for i := 0; i < numSamples; i++ {
-        for k := 1; k < lof.MinPts; k++ {
-            lof.KNNsBackup[i][k - 1] = lof.KNNs[i][k - 1] 
         } 
     }
 }
