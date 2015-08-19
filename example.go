@@ -46,4 +46,5 @@ func main() {
     for sample, factor := range mapping {
         fmt.Printf("Sample: %v,  \tLOF: %f\n", sample.GetPoint(), factor)
     }
+    lofGetter.Reset()
 }

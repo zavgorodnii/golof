@@ -7,7 +7,7 @@ import (
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//  A Local Outlier Factor algorithm (Markus M. Breunig) implementation.
+//  A Local Outlier Factor algorithm (`Markus M. Breunig) implementation.
 //  This implementation allows you to choose between updating nearest
 //  neighbors for all the samples OR updating nearest neighbors only for
 //  nearest neighbors of the added sample; See @mode parameter in GetLOFs()
@@ -45,6 +45,8 @@ type LOF struct {
     // nearest neighbors info for each sample (first neighbor
     // is the nearest)
     KNNs        [][]int
+    // Keeps the LOF.KNNs state just after training; see Reset()
+    KNNsBackup  [][]int
     // Not used yet
     MinTrain    []float64
     // Not used yet
@@ -78,47 +80,16 @@ func NewLOF(minPts int, trnSamples []ISample) *LOF {
     for idx := 0; idx < addedIndex; idx++ {
         lof.Distances[idx] = make([]DistItem, addedIndex)
     }
-    // Prepare storage for each sample's k-neighbors
+    // Prepare storage for each sample's k-neighbors (and backup)
     lof.KNNs = make([][]int, addedIndex)
+    lof.KNNsBackup = make([][]int, addedIndex)
     for idx := 0; idx < addedIndex; idx++ {
         lof.KNNs[idx] = make([]int, minPts)
+        lof.KNNsBackup[idx] = make([]int, minPts)
     }
     lof.train(trnSamples)
     
     return lof
-}
-
-// Pre-compute distances between training samples and store their
-// nearest neighbors in LOF.KNNs.
-func (lof *LOF) train(samples []ISample) {
-
-    // Throughout the train() method this value  is used for direct indexing
-    // (i.e., not inside a for ...;...;... statement), so we need
-    // to subtract 1 in order not to get out of range 
-    addedIndex := lof.AddedIndex - 1
-    numSamples := lof.NumSamples
-    for idx, sample := range samples {
-        sample.SetId(idx)  // Just additional info
-    }
-
-    // Compute distances between training samples
-    for i := 0; i < numSamples; i++ {
-        for j := 0; j < numSamples; j++ {
-            if i == j {
-                lof.Distances[i][j].Value = 0  // This is distinctive
-                lof.Distances[i][j].Index = j
-            } else {
-                lof.Distances[i][j].Value = SampleDist(samples[i], samples[j])
-                lof.Distances[j][i].Value = lof.Distances[i][j].Value
-                lof.Distances[i][j].Index = j
-                lof.Distances[j][i].Index = i
-            }
-        }
-        // Set the additional slot's last value
-        lof.Distances[addedIndex][addedIndex].Value = 0
-        lof.Distances[addedIndex][addedIndex].Index = addedIndex
-        lof.updateNNTable(i, "train")
-    }
 }
 
 // Shortcut for getting LOF for many samples. See GetLOF() method.
@@ -176,7 +147,7 @@ func (lof *LOF) GetLOF(added ISample, mode string) float64 {
             lof.updateNNTable(idx, "compute")  
         }
     }
-    
+    // Compute the LOF value
     addedDensity := lof.getDensity(addedIndex)
     neighborDensitySum := .0
     for _, neighborIndex := range lof.KNNs[addedIndex] {
@@ -184,6 +155,59 @@ func (lof *LOF) GetLOF(added ISample, mode string) float64 {
     }
     factor := (neighborDensitySum / addedDensity) / float64(lof.MinPts)
     return factor
+}
+
+// This function resets the LOF.KNNs table to the state right after
+// training. This may be necessery because after each GetLOF() call
+// in the "fast" mode the table may get a bit distorted if some of
+// the new samples happen to be somebody's nearest neighbors; thus
+// there will be an accumulated error. This requires linear time.
+func (lof *LOF) Reset() {
+
+    for i := 0; i < lof.NumSamples; i++ {
+        for k := 1; k < lof.MinPts; k++ {
+            lof.KNNs[i][k - 1] = lof.KNNsBackup[i][k - 1] 
+        } 
+    }
+}
+
+// Pre-compute distances between training samples and store their
+// nearest neighbors in LOF.KNNs.
+func (lof *LOF) train(samples []ISample) {
+
+    // Throughout the train() method this value  is used for direct indexing
+    // (i.e., not inside a for ...;...;... statement), so we need
+    // to subtract 1 in order not to get out of range 
+    addedIndex := lof.AddedIndex - 1
+    numSamples := lof.NumSamples
+    for idx, sample := range samples {
+        sample.SetId(idx)  // Just additional info
+    }
+
+    // Compute distances between training samples
+    for i := 0; i < numSamples; i++ {
+        for j := 0; j < numSamples; j++ {
+            if i == j {
+                lof.Distances[i][j].Value = 0  // This is distinctive
+                lof.Distances[i][j].Index = j
+            } else {
+                lof.Distances[i][j].Value = SampleDist(samples[i], samples[j])
+                lof.Distances[j][i].Value = lof.Distances[i][j].Value
+                lof.Distances[i][j].Index = j
+                lof.Distances[j][i].Index = i
+            }
+        }
+        // Set the additional slot's last value
+        lof.Distances[addedIndex][addedIndex].Value = 0
+        lof.Distances[addedIndex][addedIndex].Index = addedIndex
+        lof.updateNNTable(i, "train")
+    }
+    // Save the nearest neighbors table state in the backup storage 
+    for i := 0; i < numSamples; i++ {
+        for k := 1; k < lof.MinPts; k++ {
+            lof.KNNsBackup[i][k - 1] = lof.KNNs[i][k - 1] 
+        } 
+    }
 }
 
 // Given a sample's index in Distance table, update this sample's

@@ -46,7 +46,7 @@ points := [][]float64{
 
 ```
 
-Convert them to `ISample`s (golof works with `ISample` interface, see `lof/samples.go`
+Convert them to `ISample` slice (`golof` works with `ISample` interface, see `lof/samples.go`
 for details):
 
 ``` go
@@ -55,7 +55,7 @@ samples   := lof.GetSamplesFromFloat64s(points)
 
 ```
 
-Get a trained LOF type value:
+Get a trained `LOF` type value:
 
 ``` go
 
@@ -63,7 +63,7 @@ lofGetter := lof.NewLOF(5, samples)
 
 ```
 
-Obtain and print a mapping from samples to their LOF values:
+Obtain and print a mapping from samples to their `LOF` values:
 
 ``` go
 
@@ -73,6 +73,10 @@ for sample, factor := range mapping {
 }
 
 ```
+The second argument to GetLOFs, namely `"fast"`, tells `LOF` that we
+want to update the KNN table only for those samples that are the new
+sample's nearest neighbors. If you want to perform a full update each
+time, change "fast" to "strict".
 
 Expected output:
 
