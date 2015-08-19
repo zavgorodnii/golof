@@ -76,7 +76,7 @@ for sample, factor := range mapping {
 The second argument to `GetLOFs()`, namely `"fast"`, tells `LOF` that we
 want to update the KNN table only for those samples that are the new
 sample's nearest neighbors. If you want to perform a full update each
-time, change "fast" to "strict".
+time, change `"fast"` to `"strict"`.
 
 Expected output:
 
