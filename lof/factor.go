@@ -73,8 +73,8 @@ func NewLOF(minPts int) *LOF {
 // nearest neighbors in LOF.KNNs.
 func (lof *LOF) Train(samples []ISample) {
 
+    lof.checkSamples(samples)
     numSamples := len(samples)
-    lof.checkSamples(numSamples)
     // After training we want to compute LOF values for
     // new samples, and we need some space for their
     // distances; if we find LOF for one new sample at a
