@@ -1,9 +1,11 @@
-package lof
+package ml
 
 import (
     "log"
     "math"
 )
+
+const LNotEnoughSamples = "LOF: not enough samples to train!"
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -13,9 +15,6 @@ import (
 //  nearest neighbors of the added sample; See @mode parameter in GetLOFs()
 //  and GetLOF(). 
 //
-//  Created by Andrew Zavgorodny (a.o.zavgorodny@gmail.com); feel free to
-//  report bugs and contribute.
-// 
 //////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////////////
@@ -75,6 +74,7 @@ func NewLOF(minPts int) *LOF {
 func (lof *LOF) Train(samples []ISample) {
 
     numSamples := len(samples)
+    lof.checkSamples(numSamples)
     // After training we want to compute LOF values for
     // new samples, and we need some space for their
     // distances; if we find LOF for one new sample at a
@@ -205,6 +205,7 @@ func (lof *LOF) GetLOF(added ISample, mode string) float64 {
 // there will be an accumulated error. This requires linear time.
 func (lof *LOF) Reset() {
 
+    log.Println("LOF: resetting NNs")
     for i := 0; i < lof.NumSamples; i++ {
         for k := 1; k < lof.MinPts; k++ {
             lof.KNNs[i][k - 1] = lof.KNNsBackup[i][k - 1] 
@@ -271,4 +272,11 @@ func (lof *LOF) checkOptimization(mode string) bool {
     }
 
     return optimized
+}
+
+func (lof *LOF) checkSamples(samples []ISample) {
+
+    if len(samples) < lof.MinPts {
+        log.Fatal(LNotEnoughSamples)
+    }
 }
