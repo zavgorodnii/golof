@@ -1,11 +1,21 @@
-package ml
+package lof
 
 import (
     "log"
     "math"
 )
 
-const LNotEnoughSamples = "LOF: not enough samples to train!"
+const (
+    // It might be the case that many samples in the training set have exactly
+    // the same features. This results in zero distances, which may produce
+    // Inf values for float division in getDensity(); we set a minimal sum value
+    // to avoid that.
+    CMinimalSum = 10e-15
+)
+
+const (
+    LNotEnoughSamples = "LOF: not enough samples to train!"
+)
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -60,19 +70,16 @@ type LOF struct {
 // Constructor for LOF type. Check out ./samples.GetSamplesFromFloat64s()
 // for fast [][]float64 -> []ISample conversion.
 func NewLOF(minPts int) *LOF {
-
     // Create the LOF object
     lof := &LOF{
         MinPts: minPts,
     }
-    
     return lof
 }
 
 // Pre-compute distances between training samples and store their
 // nearest neighbors in LOF.KNNs.
 func (lof *LOF) Train(samples []ISample) {
-
     lof.checkSamples(samples)
     numSamples := len(samples)
     // After training we want to compute LOF values for
@@ -80,11 +87,9 @@ func (lof *LOF) Train(samples []ISample) {
     // distances; if we find LOF for one new sample at a
     // time, a single additional slot will be enough.
     addedIndex := len(samples) + 1
-
     lof.TrainingSet = samples
     lof.NumSamples = numSamples
     lof.AddedIndex = addedIndex        
-
     // Prepare storage between training samples
     lof.Distances = make([][]DistItem, addedIndex)
     for idx := 0; idx < addedIndex; idx++ {
@@ -97,7 +102,6 @@ func (lof *LOF) Train(samples []ISample) {
         lof.KNNs[idx] = make([]int, lof.MinPts)
         lof.KNNsBackup[idx] = make([]int, lof.MinPts)
     }
-
     // Throughout the train() method this value  is used for direct indexing
     // (i.e., not inside a for ...;...;... statement), so we need
     // to subtract 1 in order not to get out of range 
@@ -106,12 +110,11 @@ func (lof *LOF) Train(samples []ISample) {
     for idx, sample := range samples {
         sample.SetId(idx)  // Just additional info
     }
-
     // Compute distances between training samples
     for i := 0; i < numSamples; i++ {
         for j := 0; j < numSamples; j++ {
             if i == j {
-                lof.Distances[i][j].Value = 0  // This is distinctive
+                lof.Distances[i][j].Value = -1  // This is distinctive
                 lof.Distances[i][j].Index = j
             } else {
                 lof.Distances[i][j].Value = SampleDist(samples[i], samples[j])
@@ -127,20 +130,18 @@ func (lof *LOF) Train(samples []ISample) {
     }
     // Save the nearest neighbors table state in the backup storage 
     for i := 0; i < numSamples; i++ {
-        for k := 1; k < lof.MinPts; k++ {
-            lof.KNNsBackup[i][k - 1] = lof.KNNs[i][k - 1] 
+        for k := 0; k < lof.MinPts; k++ {
+            lof.KNNsBackup[i][k] = lof.KNNs[i][k] 
         } 
     }
 }
 
 // Shortcut for getting LOF for many samples. See GetLOF() method.
 func (lof *LOF) GetLOFs(samples []ISample, mode string) map[ISample]float64 {
-
     output := make(map[ISample]float64)
     for _, sample := range samples {
         output[sample] = lof.GetLOF(sample, mode)
     }
-
     return output
 }
 
@@ -148,7 +149,6 @@ func (lof *LOF) GetLOFs(samples []ISample, mode string) map[ISample]float64 {
 // paper and see implemetation for details. Read below for @mode param
 // explanation.
 func (lof *LOF) GetLOF(added ISample, mode string) float64 {
-
     // Decision between updating nearest neighbors for all the samples
     // OR updating nearest neighbors only for nearest neighbors of the
     // added sample
@@ -169,7 +169,6 @@ func (lof *LOF) GetLOF(added ISample, mode string) float64 {
         lof.Distances[addedIndex][i] = dist
         lof.Distances[addedIndex][i].Index = i
     }
-
     if optimized {
         // Fill nearest neighbors table for added sample
         // (but don't touch any other samples yet)
@@ -204,11 +203,10 @@ func (lof *LOF) GetLOF(added ISample, mode string) float64 {
 // the new samples happen to be somebody's nearest neighbors; thus
 // there will be an accumulated error. This requires linear time.
 func (lof *LOF) Reset() {
-
     log.Println("LOF: resetting NNs")
     for i := 0; i < lof.NumSamples; i++ {
-        for k := 1; k < lof.MinPts; k++ {
-            lof.KNNs[i][k - 1] = lof.KNNsBackup[i][k - 1] 
+        for k := 0; k < lof.MinPts; k++ {
+            lof.KNNs[i][k] = lof.KNNsBackup[i][k] 
         } 
     }
 }
@@ -218,7 +216,6 @@ func (lof *LOF) Reset() {
 // controls whether we use the whole table row length (with added
 // sample's slots, for LOF computation)
 func (lof *LOF) updateNNTable(sampleIndex int, mode string) {
-
     bound := 0
     switch mode {
     case "train":
@@ -233,7 +230,7 @@ func (lof *LOF) updateNNTable(sampleIndex int, mode string) {
     copy(sorted, lof.Distances[sampleIndex])
     SortDistItems(sorted)
     // Find nearest samples for current one: take MinPts nearest
-    for k := 1; k < lof.MinPts; k++ {
+    for k := 1; k <= lof.MinPts; k++ {
         lof.KNNs[sampleIndex][k - 1] = sorted[k].Index
     }
 }
@@ -241,8 +238,7 @@ func (lof *LOF) updateNNTable(sampleIndex int, mode string) {
 // Returns Local Reachability Density for a sample (see the original
 // paper for Local Reachability Density).
 func (lof *LOF) getDensity(sampleIdx int) float64 {
-
-    distanceSum := .0
+    var distanceSum float64
     lastNeighborIdx := lof.MinPts - 1
     for _, neighborIdx := range lof.KNNs[sampleIdx] {
         // This is pre-computed distance between target sample
@@ -253,14 +249,12 @@ func (lof *LOF) getDensity(sampleIdx int) float64 {
         // distance
         kDistanceIdx := lof.KNNs[neighborIdx][lastNeighborIdx]
         kDistance := lof.Distances[sampleIdx][kDistanceIdx].Value
-        distanceSum += math.Max(distance, kDistance)
+        distanceSum += math.Max(math.Max(distance, kDistance), CMinimalSum)
     }
-
     return float64(lof.MinPts) / distanceSum
 }
 
 func (lof *LOF) checkOptimization(mode string) bool {
-
     var optimized bool
     switch mode {
     case "fast":
@@ -270,12 +264,10 @@ func (lof *LOF) checkOptimization(mode string) bool {
     default:
         log.Fatal("LOF: @mode should be either \"fast\" or \"strict\"")
     }
-
     return optimized
 }
 
 func (lof *LOF) checkSamples(samples []ISample) {
-
     if len(samples) < lof.MinPts {
         log.Fatal(LNotEnoughSamples)
     }
